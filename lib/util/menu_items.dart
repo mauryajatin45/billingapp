@@ -17,7 +17,7 @@ const List<MenuItemData> menuItems = [
   MenuItemData(to: "inventory", label: "Inventory", icon: FeatherIcons.box),
   MenuItemData(to: "profit", label: "Profit & Loss", icon: FeatherIcons.trendingUp),
   MenuItemData(to: "expenses", label: "Expenses", icon: FeatherIcons.dollarSign),
-  MenuItemData(to: "customers", label: "Customers", icon: FeatherIcons.users),
+  MenuItemData(to: "Parties", label: "Parties", icon: FeatherIcons.users),
   MenuItemData(to: "settings", label: "Settings", icon: FeatherIcons.settings),
 ];
 
