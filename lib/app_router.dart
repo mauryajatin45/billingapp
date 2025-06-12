@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Layout
 import 'layout/main_layout.dart';
@@ -13,13 +14,28 @@ import 'screens/inventoryTracking/InventoryTracking.dart';
 import 'screens/profitLoss/ProfitLoss.dart';
 import 'screens/expenses/Expenses.dart';
 import 'screens/parties/Parties.dart';
-import 'screens/settings/Settings.dart'; // Import the settings page here
+import 'screens/settings/Settings.dart';
 import 'screens/reports/Reports.dart';
+
+// Auth Screens
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/signup_screen.dart';
+import 'screens/auth/otp_verification_screen.dart';
 
 // App Router
 final GoRouter appRouter = GoRouter(
-  initialLocation: '/dashboard', // Set the initial route
+  initialLocation: '/login', // Changed to login as initial route
   routes: [
+    // Auth routes (outside ShellRoute as they don't need the main layout)
+    GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+    GoRoute(path: '/signup', builder: (_, __) => const SignupScreen()),
+    GoRoute(
+      path: '/verify-otp',
+      builder: (_, state) =>
+          OtpVerificationScreen(mobile: state.extra as String),
+    ),
+
+    // Main app routes with ShellRoute for the layout
     ShellRoute(
       builder: (context, state, child) => MainLayout(child: child),
       routes: [
@@ -65,13 +81,12 @@ final GoRouter appRouter = GoRouter(
           name: 'reports',
           builder: (context, state) => const ReportsScreen(),
         ),
+
         // Settings Routes
         GoRoute(
           path: '/settings',
-          builder: (context, state) =>
-              const SettingsPage(), // Correctly reference SettingsPage
+          builder: (context, state) => const SettingsPage(),
           routes: [
-            // Sub-routes for settings pages (same SettingsPage, just different sections)
             GoRoute(
               path: 'user',
               builder: (context, state) => const SettingsPage(),
@@ -106,9 +121,21 @@ final GoRouter appRouter = GoRouter(
             ),
           ],
         ),
-
-        // Add additional routes here
       ],
     ),
   ],
+  // Redirect logic for authentication
+  redirect: (BuildContext context, GoRouterState state) async {
+    final prefs = await SharedPreferences.getInstance();
+    final bool loggedIn = prefs.getString('authToken') != null;
+    final bool goingToAuth =
+        state.matchedLocation.startsWith('/login') ||
+        state.matchedLocation.startsWith('/signup') ||
+        state.matchedLocation.startsWith('/verify-otp');
+
+    if (!loggedIn && !goingToAuth) return '/login';
+    if (loggedIn && goingToAuth) return '/dashboard';
+
+    return null;
+  },
 );
