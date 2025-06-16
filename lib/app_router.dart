@@ -143,7 +143,7 @@ Future<Widget> initializeApp() async {
     redirect: (context, state) {
       final loggedIn = authNotifier.loggedIn;
       final location = state.uri.toString();
-      final goingToAuth = location == '/login' || location == '/signup';
+      final goingToAuth = location == '/login' || location == '/signup' || location == '/verify-otp';
       if (!loggedIn && !goingToAuth) return '/login';
       if (loggedIn && goingToAuth) return '/dashboard';
       return null;

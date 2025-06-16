@@ -99,6 +99,11 @@ class _SignupScreenState extends State<SignupScreen> {
         _secondsRemaining = 60;
         _isLoading = false;
       });
+
+      // Navigate to OTP verification screen with mobile number
+      if (mounted) {
+        context.go('/verify-otp', extra: _mobileController.text);
+      }
       
       // Start OTP timer
       _startTimer();

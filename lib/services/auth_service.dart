@@ -83,12 +83,10 @@ class AuthService {
           .timeout(timeoutDuration);
 
       final responseData = _handleResponse(response);
-      final token = _validateAndExtractToken(responseData);
       final prefs = await SharedPreferences.getInstance();
 
       await prefs.setBool('isRegistered', true);
       await prefs.setString('registeredMobile', mobile);
-      await prefs.setString('authToken', token);
 
       // Save userId if available
       final userData = responseData['data']?['user'];
@@ -150,15 +148,13 @@ class AuthService {
           .timeout(timeoutDuration);
 
       final responseData = _handleResponse(response);
-      final token = _validateAndExtractToken(responseData);
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isVerified', true);
       await prefs.remove('isRegistered');
       await prefs.remove('registeredMobile');
-      await prefs.setString('authToken', token);
 
-      // ✅ Store userId after OTP verification (if applicable)
+      // Save userId if available
       final userData = responseData['data']?['user'];
       if (userData != null && userData['id'] != null) {
         await prefs.setString('userId', userData['id'].toString());

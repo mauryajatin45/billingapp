@@ -187,7 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Card(
+                Card(
                   elevation: 2,
                   child: Padding(
                     padding: EdgeInsets.all(16),
