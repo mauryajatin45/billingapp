@@ -17,8 +17,9 @@ const List<MenuItemData> menuItems = [
   MenuItemData(to: "inventory", label: "Inventory", icon: FeatherIcons.box),
   MenuItemData(to: "profit", label: "Profit & Loss", icon: FeatherIcons.trendingUp),
   MenuItemData(to: "expenses", label: "Expenses", icon: FeatherIcons.dollarSign),
-  MenuItemData(to: "Parties", label: "Parties", icon: FeatherIcons.users),
+  MenuItemData(to: "parties", label: "Parties", icon: FeatherIcons.users),
   MenuItemData(to: "settings", label: "Settings", icon: FeatherIcons.settings),
+  MenuItemData(to: "logout", label: "Logout", icon: FeatherIcons.logOut),
 ];
 
 const reportItem = MenuItemData(

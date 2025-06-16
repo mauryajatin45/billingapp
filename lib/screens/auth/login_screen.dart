@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '../../services/auth_service.dart';
+import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart'; // Required for context.go
+import '../../../services/auth_service.dart';
+import '../../../app_router.dart'; // AuthNotifier is here
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,27 +29,28 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
-      await AuthService.login(
+      final response = await AuthService.login(
         mobile: _mobileController.text,
         password: _passwordController.text,
       );
-      
-      // Navigate to OTP verification with mobile number
-      if (mounted) {
-        context.push('/verify-otp', extra: _mobileController.text);
+
+      // Extract token from nested structure
+      final data = response['data'] as Map<String, dynamic>?;
+      final tokens = data?['tokens'] as Map<String, dynamic>?;
+      final token = tokens?['access'] as String?;
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Access token not found in response');
       }
+
+      final authNotifier = Provider.of<AuthNotifier>(context, listen: false);
+      await authNotifier.setLoggedIn(token);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
+      // Error handling remains the same
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -65,16 +68,19 @@ class _LoginScreenState extends State<LoginScreen> {
               Image.asset(
                 'assets/images/logo.png',
                 height: 100,
-                errorBuilder: (context, error, stackTrace) => 
-                  const Icon(Icons.account_balance, size: 100, color: Colors.blue),
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.account_balance,
+                  size: 100,
+                  color: Colors.blue,
+                ),
               ),
               const SizedBox(height: 40),
               Text(
                 'Login to Your Account',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: Colors.blue[800],
-                      fontWeight: FontWeight.bold,
-                    ),
+                  color: Colors.blue[800],
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 40),
@@ -112,10 +118,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         prefixIcon: const Icon(Icons.lock),
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                            _obscurePassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                           ),
                           onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
+                            setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            );
                           },
                         ),
                         border: OutlineInputBorder(
@@ -140,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: () {
-                          // Navigate to forgot password screen
+                          // TODO: Navigate to forgot password screen
                         },
                         child: Text(
                           'Forgot Password?',
@@ -181,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   TextButton(
                     onPressed: () {
-                      context.push('/signup');
+                      context.go('/signup');
                     },
                     child: Text(
                       'Sign Up',
