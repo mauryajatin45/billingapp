@@ -1,12 +1,12 @@
-// lib/screens/dashboard/dashboard_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:billingapp/screens/dashboard/stat_card.dart';
 import 'package:billingapp/screens/dashboard/invoice_table.dart';
-import 'package:billingapp/screens/dashboard/charts/bar_chart_widget.dart';
-import 'package:billingapp/screens/dashboard/charts/pie_chart_widget.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -37,11 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final prefs = await SharedPreferences.getInstance();
     _authToken = prefs.getString('authToken');
 
-    await Future.wait([
-      _fetchBilling(),
-      _fetchExpenses(),
-      _fetchInventory(),
-    ]);
+    await Future.wait([_fetchBilling(), _fetchExpenses(), _fetchInventory()]);
 
     setState(() {
       profit = totalBilling - totalExpenses;
@@ -81,7 +77,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       for (var item in data) {
         double amount = (item['amount'] as num).toDouble();
         totalExpenses += amount;
-        final index = expenseCategories.indexWhere((e) => e['name'] == item['category']);
+        final index = expenseCategories.indexWhere(
+          (e) => e['name'] == item['category'],
+        );
         if (index >= 0) {
           expenseCategories[index]['value'] += amount;
         } else {
@@ -101,6 +99,104 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final List data = jsonDecode(response.body)['data'];
       stockCount = data.length;
     }
+  }
+
+  Widget _buildBarChart() {
+    final formatter = NumberFormat.compactCurrency(
+      locale: 'en_IN',
+      symbol: '₹',
+    );
+
+    final maxY = salesData
+        .map((e) => (e['value'] as num).toDouble())
+        .reduce((a, b) => a > b ? a : b);
+    final yStep = (maxY / 5).ceilToDouble();
+    final roundedMaxY = (maxY / yStep).ceil() * yStep;
+
+    return BarChart(
+      BarChartData(
+        maxY: roundedMaxY,
+        barGroups: salesData.asMap().entries.map((entry) {
+          final index = entry.key;
+          final value = (entry.value['value'] as num).toDouble();
+          return BarChartGroupData(
+            x: index,
+            barRods: [
+              BarChartRodData(
+                toY: value,
+                width: 18,
+                color: Colors.teal,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
+          );
+        }).toList(),
+        titlesData: FlTitlesData(
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 28,
+              getTitlesWidget: (value, _) {
+                final index = value.toInt();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    index >= 0 && index < salesData.length
+                        ? salesData[index]['name']
+                        : '',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 48,
+              interval: yStep,
+              getTitlesWidget: (value, _) => Text(
+                formatter.format(value),
+                style: const TextStyle(fontSize: 10),
+              ),
+            ),
+          ),
+          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: FlGridData(show: true, horizontalInterval: yStep),
+        borderData: FlBorderData(show: false),
+      ),
+    );
+  }
+
+  Widget _buildPieChart() {
+    final colors = [Colors.teal, Colors.orange, Colors.purple, Colors.blue];
+    return PieChart(
+      PieChartData(
+        sections: expenseCategories.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final value = (entry.value['value'] as num).toDouble();
+          final name = entry.value['name'];
+          return PieChartSectionData(
+            value: value,
+            color: colors[idx % colors.length],
+            title: '$name\n₹${value.toStringAsFixed(0)}',
+            radius: 60,
+            titleStyle: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        }).toList(),
+        sectionsSpace: 2,
+        centerSpaceRadius: 40,
+      ),
+    );
   }
 
   @override
@@ -147,13 +243,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         const Text(
                           "Monthly Sales",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        SizedBox(
-                          height: 200,
-                          child: BarChartWidget(data: salesData),
-                        ),
+                        SizedBox(height: 200, child: _buildBarChart()),
                       ],
                     ),
                   ),
@@ -167,13 +263,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         const Text(
                           "Expense Category",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 16),
-                        SizedBox(
-                          height: 200,
-                          child: PieChartWidget(data: expenseCategories),
-                        ),
+                        SizedBox(height: 200, child: _buildPieChart()),
                       ],
                     ),
                   ),
@@ -190,7 +286,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Card(
                   elevation: 2,
                   child: Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     child: InvoiceTable(),
                   ),
                 ),
