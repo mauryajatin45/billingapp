@@ -54,31 +54,50 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
       final inventoryData = jsonDecode(inventoryRes.body)['data'] ?? [];
       final expenseData = jsonDecode(expenseRes.body)['data'] ?? [];
 
+      // Create a map of products by ID for quick lookup
+      final productMap = { for (var p in inventoryData) p['_id'] : p };
+
       Map<String, Map<String, double>> monthMap = {};
 
-      // Process invoices with proper type conversion
+      // Helper function to initialize month entries safely
+      void initMonth(String month) {
+        monthMap.putIfAbsent(month, () => {
+          "revenue": 0.0,
+          "expense": 0.0,
+          "cogs": 0.0
+        });
+      }
+
+      // Process invoices - calculate revenue and COGS
       for (var inv in invoiceData) {
         String month = DateFormat('MMM').format(DateTime.parse(inv['date']));
-        double amount = (inv['grandTotal'] as num?)?.toDouble() ?? 0.0;
-        monthMap.putIfAbsent(month, () => {"revenue": 0.0, "expense": 0.0, "cost": 0.0});
-        monthMap[month]!['revenue'] = (monthMap[month]!['revenue']! + amount);
+        initMonth(month);
+        
+        // Calculate revenue (subtotal without taxes, shipping, etc.)
+        double revenue = (inv['subtotal'] as num?)?.toDouble() ?? 0.0;
+        monthMap[month]!['revenue'] = monthMap[month]!['revenue']! + revenue;
+        
+        // Calculate COGS (Cost of Goods Sold)
+        double cogs = 0.0;
+        for (var item in inv['items']) {
+          String? productId = item['productId']?.toString();
+          int quantity = item['quantity'] as int? ?? 0;
+          
+          // Get purchase price from product map
+          if (productId != null && productMap.containsKey(productId)) {
+            double purchasePrice = (productMap[productId]!['price'] as num?)?.toDouble() ?? 0.0;
+            cogs += purchasePrice * quantity;
+          }
+        }
+        monthMap[month]!['cogs'] = monthMap[month]!['cogs']! + cogs;
       }
 
-      // Process expenses with proper type conversion
+      // Process expenses
       for (var exp in expenseData) {
         String month = DateFormat('MMM').format(DateTime.parse(exp['date']));
+        initMonth(month);
         double amount = (exp['amount'] as num?)?.toDouble() ?? 0.0;
-        monthMap.putIfAbsent(month, () => {"revenue": 0.0, "expense": 0.0, "cost": 0.0});
-        monthMap[month]!['expense'] = (monthMap[month]!['expense']! + amount);
-      }
-
-      // Process inventory costs
-      for (var item in inventoryData) {
-        String month = DateFormat('MMM').format(DateTime.now());
-        double cost = ((item['price'] as num?)?.toDouble() ?? 0.0) * 
-                     ((item['currentStock'] as num?)?.toDouble() ?? 0.0);
-        monthMap.putIfAbsent(month, () => {"revenue": 0.0, "expense": 0.0, "cost": 0.0});
-        monthMap[month]!['cost'] = (monthMap[month]!['cost']! + cost);
+        monthMap[month]!['expense'] = monthMap[month]!['expense']! + amount;
       }
 
       // Convert to list and sort by month
@@ -86,13 +105,21 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
         return {
           "month": e.key,
           "revenue": e.value['revenue']!,
-          "cost": e.value['cost']!,
+          "cogs": e.value['cogs']!,
           "expense": e.value['expense']!,
         };
       }).toList();
 
-      monthlyData.sort((a, b) =>
-          DateFormat('MMM').parse(a['month']).month.compareTo(DateFormat('MMM').parse(b['month']).month));
+      // Sort by month in calendar order
+      monthlyData.sort((a, b) {
+        try {
+          final monthA = DateFormat('MMM').parse(a['month']);
+          final monthB = DateFormat('MMM').parse(b['month']);
+          return monthA.month.compareTo(monthB.month);
+        } catch (e) {
+          return 0;
+        }
+      });
 
       setState(() {
         _data = monthlyData;
@@ -106,17 +133,16 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     }
   }
 
-  // Handle single data points by duplicating them
+  // Safe spot generation with null handling
   List<FlSpot> _buildSpots(List<Map<String, dynamic>> data, String key) {
     if (data.isEmpty) return [];
-    if (data.length == 1) {
-      return [
-        FlSpot(0, data[0][key] as double),
-        FlSpot(1, data[0][key] as double),
-      ];
-    }
-    return List.generate(data.length, 
-        (i) => FlSpot(i.toDouble(), data[i][key] as double));
+    return List.generate(
+      data.length, 
+      (i) => FlSpot(
+        i.toDouble(), 
+        (data[i][key] as num?)?.toDouble() ?? 0.0
+      )
+    );
   }
 
   // Calculate max Y value based on revenue/expense only
@@ -124,25 +150,42 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     if (_data.isEmpty) return 100;
     
     double maxValue = _data.fold(0.0, (max, item) {
-      final currentMax = [
-        item['revenue'] ?? 0.0,
-        item['expense'] ?? 0.0,
-      ].reduce((a, b) => a > b ? a : b);
+      final revenue = (item['revenue'] as num?)?.toDouble() ?? 0.0;
+      final expense = (item['expense'] as num?)?.toDouble() ?? 0.0;
+      final currentMax = revenue > expense ? revenue : expense;
       return currentMax > max ? currentMax : max;
     });
 
     return (maxValue * 1.5).ceilToDouble();
   }
 
+  // Calculate max value for COGS chart
+  double _getMaxYForCogs() {
+    if (_data.isEmpty) return 100;
+    
+    double maxCogs = _data.fold(0.0, (max, item) {
+      final cogs = (item['cogs'] as num?)?.toDouble() ?? 0.0;
+      return cogs > max ? cogs : max;
+    });
+
+    return (maxCogs * 1.5).ceilToDouble();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final double totalRevenue = _data.fold(0.0, (sum, item) => sum + (item['revenue'] as double));
-    final double totalCost = _data.fold(0.0, (sum, item) => sum + (item['cost'] as double));
-    final double totalExpense = _data.fold(0.0, (sum, item) => sum + (item['expense'] as double));
-
-    final double margin = totalRevenue != 0
-        ? ((totalRevenue - totalExpense) / totalRevenue * 100)
-        : 0;
+    // Safe calculations with null fallback
+    final double totalRevenue = _data.fold(0.0, (sum, item) => 
+        sum + ((item['revenue'] as num?)?.toDouble() ?? 0.0));
+    final double totalCogs = _data.fold(0.0, (sum, item) => 
+        sum + ((item['cogs'] as num?)?.toDouble() ?? 0.0));
+    final double totalExpense = _data.fold(0.0, (sum, item) => 
+        sum + ((item['expense'] as num?)?.toDouble() ?? 0.0));
+    
+    final double grossProfit = totalRevenue - totalCogs;
+    final double netProfit = grossProfit - totalExpense;
+    
+    final double grossMargin = totalRevenue != 0 ? (grossProfit / totalRevenue * 100) : 0;
+    final double netMargin = totalRevenue != 0 ? (netProfit / totalRevenue * 100) : 0;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profit & Loss')),
@@ -178,23 +221,35 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                         spacing: 12,
                         runSpacing: 12,
                         children: [
-                          _infoCard('Revenue', '₹${totalRevenue.toStringAsFixed(2)}', cardWidth),
-                          _infoCard('Cost', '₹${totalCost.toStringAsFixed(2)}', cardWidth),
-                          _infoCard('Expense', '₹${totalExpense.toStringAsFixed(2)}', cardWidth),
-                          _infoCard('Margin', '${margin.toStringAsFixed(1)}%', cardWidth),
+                          _infoCard(
+                            'Revenue', 
+                            '₹${totalRevenue.toStringAsFixed(2)}', 
+                            cardWidth: cardWidth
+                          ),
+                          _infoCard(
+                            'COGS', 
+                            '₹${totalCogs.toStringAsFixed(2)}', 
+                            cardWidth: cardWidth
+                          ),
+                          _infoCard(
+                            'Expenses', 
+                            '₹${totalExpense.toStringAsFixed(2)}', 
+                            cardWidth: cardWidth
+                          ),
+                          _infoCard(
+                            'Net Profit', 
+                            '₹${netProfit.toStringAsFixed(2)}', 
+                            secondLine: '${netMargin.toStringAsFixed(1)}% margin', 
+                            cardWidth: cardWidth
+                          ),
                         ],
                       );
                     },
                   ),
                   const SizedBox(height: 32),
                   const Text(
-                    'Revenue, Cost & Expense',
+                    'Revenue & Expenses',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Note: Cost shown represents inventory value, not COGS',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
@@ -210,8 +265,9 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                               interval: 1,
                               getTitlesWidget: (value, _) {
                                 int index = value.toInt();
-                                if (index < 0 || index >= _data.length)
+                                if (index < 0 || index >= _data.length) {
                                   return const SizedBox.shrink();
+                                }
                                 return Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Text(
@@ -258,33 +314,122 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Gross Profit (Revenue - COGS)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
                   SizedBox(
-                    height: 150,
+                    height: 300,
                     child: BarChart(
                       BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: _getMaxYForCogs(),
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              final revenue = (_data[groupIndex]['revenue'] as num?)?.toDouble() ?? 0.0;
+                              final cogs = (_data[groupIndex]['cogs'] as num?)?.toDouble() ?? 0.0;
+                              
+                              return BarTooltipItem(
+                                'Gross Profit: ₹${rod.toY.toStringAsFixed(2)}\n'
+                                'Revenue: ₹${revenue.toStringAsFixed(2)}\n'
+                                'COGS: ₹${cogs.toStringAsFixed(2)}',
+                                const TextStyle(color: Colors.white),
+                              );
+                            },
+                          ),
+                        ),
+                        titlesData: FlTitlesData(
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                int index = value.toInt();
+                                if (index < 0 || index >= _data.length) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 8.0),
+                                  child: Text(
+                                    _data[index]['month'],
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              reservedSize: 48,
+                              getTitlesWidget: (value, meta) {
+                                return Text(
+                                  '₹${value.toInt()}',
+                                  style: const TextStyle(fontSize: 10),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        gridData: FlGridData(show: true),
+                        borderData: FlBorderData(show: true),
                         barGroups: _data.asMap().entries.map((e) {
                           final i = e.key;
                           final item = e.value;
+                          final revenue = (item['revenue'] as num?)?.toDouble() ?? 0.0;
+                          final cogs = (item['cogs'] as num?)?.toDouble() ?? 0.0;
+                          final grossProfit = revenue - cogs;
+                          
                           return BarChartGroupData(
                             x: i,
                             barRods: [
                               BarChartRodData(
-                                toY: (item['cost'] ?? 0.0),
-                                color: Colors.redAccent,
-                                width: 16,
+                                toY: grossProfit,
+                                color: grossProfit >= 0 ? Colors.green : Colors.red,
+                                width: 22,
+                                borderRadius: BorderRadius.zero,
                               ),
                             ],
                           );
                         }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'COGS (Cost of Goods Sold)',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 150,
+                    child: BarChart(
+                      BarChartData(
+                        maxY: _getMaxYForCogs(),
+                        barTouchData: BarTouchData(
+                          enabled: true,
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                'COGS: ₹${rod.toY.toStringAsFixed(2)}\n'
+                                'Products Cost',
+                                const TextStyle(color: Colors.white),
+                              );
+                            },
+                          ),
+                        ),
                         titlesData: FlTitlesData(
                           bottomTitles: AxisTitles(
                             sideTitles: SideTitles(
                               showTitles: true,
                               getTitlesWidget: (value, _) {
                                 int index = value.toInt();
-                                if (index < 0 || index >= _data.length)
+                                if (index < 0 || index >= _data.length) {
                                   return const SizedBox.shrink();
+                                }
                                 return Padding(
                                   padding: const EdgeInsets.only(top: 8.0),
                                   child: Text(
@@ -310,6 +455,20 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
                         ),
                         gridData: FlGridData(show: false),
                         borderData: FlBorderData(show: true),
+                        barGroups: _data.asMap().entries.map((e) {
+                          final i = e.key;
+                          final item = e.value;
+                          return BarChartGroupData(
+                            x: i,
+                            barRods: [
+                              BarChartRodData(
+                                toY: (item['cogs'] as num?)?.toDouble() ?? 0.0,
+                                color: Colors.blue,
+                                width: 16,
+                              ),
+                            ],
+                          );
+                        }).toList(),
                       ),
                     ),
                   ),
@@ -319,21 +478,46 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
     );
   }
 
-  Widget _infoCard(String label, String value, double cardWidth) {
+  Widget _infoCard(String label, String value, {String? secondLine, required double cardWidth}) {
     return SizedBox(
       width: cardWidth,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.2),
+              spreadRadius: 1,
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(color: Colors.grey)),
-            const SizedBox(height: 4),
-            Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(label, style: const TextStyle(
+              color: Colors.grey, 
+              fontSize: 14,
+              fontWeight: FontWeight.w500
+            )),
+            const SizedBox(height: 6),
+            Text(value, style: const TextStyle(
+              fontSize: 16, 
+              fontWeight: FontWeight.bold,
+              color: Colors.blue
+            )),
+            if (secondLine != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(secondLine, style: const TextStyle(
+                  fontSize: 12, 
+                  color: Colors.green,
+                  fontWeight: FontWeight.w500
+                )),
+              ),
           ],
         ),
       ),
@@ -345,6 +529,7 @@ class _ProfitLossScreenState extends State<ProfitLossScreen> {
       isCurved: true,
       color: color,
       barWidth: 3,
+      isStrokeCapRound: true,
       dotData: FlDotData(show: true),
       spots: _buildSpots(data, key),
     );
