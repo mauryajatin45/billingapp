@@ -13,7 +13,7 @@ import 'screens/inventoryTracking/InventoryTracking.dart';
 import 'screens/profitLoss/ProfitLoss.dart';
 import 'screens/expenses/Expenses.dart';
 import 'screens/parties/Parties.dart';
-import 'screens/settings/Settings.dart';
+import 'screens/settings/Settings.dart';  // Updated Settings import
 import 'screens/reports/Reports.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
@@ -102,40 +102,10 @@ Future<Widget> initializeApp() async {
           GoRoute(path: '/parties', builder: (_, __) => const PartiesScreen()),
           GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
           GoRoute(path: '/logout', builder: (_, __) => const LogoutScreen()),
+          // Updated settings route without nested sections
           GoRoute(
             path: '/settings',
-            builder: (_, __) => const SettingsPage(),
-            routes: [
-              GoRoute(path: 'user', builder: (_, __) => const SettingsPage()),
-              GoRoute(
-                path: 'preferences',
-                builder: (_, __) => const SettingsPage(),
-              ),
-              GoRoute(
-                path: 'billing',
-                builder: (_, __) => const SettingsPage(),
-              ),
-              GoRoute(
-                path: 'notifications',
-                builder: (_, __) => const SettingsPage(),
-              ),
-              GoRoute(
-                path: 'security',
-                builder: (_, __) => const SettingsPage(),
-              ),
-              GoRoute(
-                path: 'integrations',
-                builder: (_, __) => const SettingsPage(),
-              ),
-              GoRoute(
-                path: 'appearance',
-                builder: (_, __) => const SettingsPage(),
-              ),
-              GoRoute(
-                path: 'account',
-                builder: (_, __) => const SettingsPage(),
-              ),
-            ],
+            builder: (_, state) => const SettingsPage(),  // Removed section parameter
           ),
         ],
       ),
