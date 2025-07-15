@@ -163,7 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: _isLoading ? null : _submitForm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[800],
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -174,7 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               'Login',
                               style: TextStyle(
                                 fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white,
                               ),
                             ),
                     ),
